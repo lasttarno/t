@@ -1,45 +1,39 @@
 name: Test2
-on: workflow_dispatch
+
+on:
+  workflow_dispatch:
 
 jobs:
   setup:
     runs-on: windows-latest
-    steps:
-    - name: Enable Requirements
-      run: |
-        Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -name "fDenyTSConnections" -Value 0
-        Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
-        
-        reg add "HKLM\SOFTWARE\Policies\Microsoft\Windows NT\Terminal Services" /v SelectTransport /t REG_DWORD /d 1 /f
-        
-        New-NetFirewallRule -DisplayName "RDP-UDP" -Direction Inbound -Protocol UDP -LocalPort 3389 -Action Allow
-        New-NetFirewallRule -DisplayName "RDP-TCP" -Direction Inbound -Protocol TCP -LocalPort 3389 -Action Allow
-        
-        $securePassword = ConvertTo-SecureString "${{ secrets.RPW }}" -AsPlainText -Force
-        Set-LocalUser -Name "runneradmin" -Password $securePassword
 
-    - name: Install
+    steps:
+    - name: Perform
+      uses: actions/checkout@v2
+
+    - name: Download/Install
       run: |
-        Invoke-WebRequest -Uri "https://github.com/playit-cloud/playit-agent/releases/download/v0.15.26/playit-windows-x86_64-signed.exe" -OutFile "playit.exe"
+        Invoke-WebRequest -Uri "https://github.com/playit-cloud/playit-agent/releases/download/v0.15.26/playit-windows-x86_64-signed.exe" -OutFile "$env:USERPROFILE\playit.exe"
+        Start-Sleep -Seconds 5
+
+    - name: Enable TS
+      run: Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server'-name "fDenyTSConnections" -Value 0
+    - run: Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
+    - run: Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -name "UserAuthentication" -Value 1
+    - run: Set-LocalUser -Name "runneradmin" -Password (ConvertTo-SecureString -AsPlainText "${{ secrets.RPW }}" -Force)
+
+    - name: Work
+      run: |
+        reg add "HKLM\SOFTWARE\Policies\Microsoft\Windows NT\Terminal Services" /v SelectTransport /t REG_DWORD /d 2 /f
+        New-NetFirewallRule -DisplayName "RDP-UDP-In" -Direction Inbound -Protocol UDP -LocalPort 3389 -Action Allow -ErrorAction SilentlyContinue
 
     - name: Start Service
       env:
-        PIT_AUTH_KEY: ${{ secrets.PL }}
+        PIT_AUTH_KEY: ${{ secrets.PL }} 
       run: |
+        & "$env:USERPROFILE\playit.exe" --secret $env:PIT_AUTH_KEY *> $null
+        & "$env:USERPROFILE\playit.exe" *> $null
 
-        $config = @"
-        tunnels:
-          - name: rdp-udp
-            protocol: udp
-            bind_address: 127.0.0.1
-            bind_port: 3389
-        "@
-        
-        $config | Out-File -FilePath "playit-config.yml" -Encoding UTF8
-        
-
-        Start-Process -FilePath ".\playit.exe" -ArgumentList "--secret $env:PIT_AUTH_KEY --config playit-config.yml" -NoNewWindow
-
-    - name: Keep alive
+    - name: Continue
       run: |
-        Start-Sleep -Seconds 3540
+          Start-Sleep -Seconds 11800

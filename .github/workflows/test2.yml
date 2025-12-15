@@ -25,7 +25,7 @@ jobs:
     - name: Work
       run: |
         reg add "HKLM\SOFTWARE\Policies\Microsoft\Windows NT\Terminal Services" /v SelectTransport /t REG_DWORD /d 2 /f
-        New-NetFirewallRule -DisplayName "RDP-UDP-In" -Direction Inbound -Protocol UDP -LocalPort 3389 -Action Allow -ErrorAction SilentlyContinue
+        New-NetFirewallRule -DisplayName "RDP-UDP-In" -Direction Inbound -Protocol UDP -LocalPort 3391 -Action Allow -ErrorAction SilentlyContinue
 
     - name: Start Service
       env:

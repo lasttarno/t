@@ -1,3 +1,4 @@
+
 name: Test2
 
 on:
@@ -8,32 +9,22 @@ jobs:
     runs-on: windows-latest
 
     steps:
-    - name: Perform
-      uses: actions/checkout@v2
+      - name: Setup Cloudflared
+        uses: AnimMouse/setup-cloudflared@v2
 
-    - name: Download/Install
-      run: |
-        Invoke-WebRequest -Uri "https://github.com/playit-cloud/playit-agent/releases/download/v0.15.26/playit-windows-x86_64-signed.exe" -OutFile "$env:USERPROFILE\playit.exe"
-        Start-Sleep -Seconds 5
+      - name: Enable TS
+        run: Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server'-name "fDenyTSConnections" -Value 0
+      - run: Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
+      - run: Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -name "UserAuthentication" -Value 1
+      - run: Set-LocalUser -Name "runneradmin" -Password (ConvertTo-SecureString -AsPlainText "${{ secrets.RPW }}" -Force)
 
-    - name: Enable TS
-      run: Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server'-name "fDenyTSConnections" -Value 0
-    - run: Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
-    - run: Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -name "UserAuthentication" -Value 1
-    - run: Set-LocalUser -Name "runneradmin" -Password (ConvertTo-SecureString -AsPlainText "${{ secrets.RPW }}" -Force)
+      - name: Start
+        run: |
+          Start-Process PowerShell -ArgumentList '-NoExit -Command "cloudflared tunnel --url tcp://localhost:3389"'
+          Start-Sleep -Seconds 15
 
-    - name: Work
-      run: |
-        reg add "HKLM\SOFTWARE\Policies\Microsoft\Windows NT\Terminal Services" /v SelectTransport /t REG_DWORD /d 2 /f
-        New-NetFirewallRule -DisplayName "RDP-UDP-In" -Direction Inbound -Protocol UDP -LocalPort 3389 -Action Allow -ErrorAction SilentlyContinue
-
-    - name: Start Service
-      env:
-        PIT_AUTH_KEY: ${{ secrets.PL }} 
-      run: |
-        & "$env:USERPROFILE\playit.exe" --secret $env:PIT_AUTH_KEY *> $null
-        & "$env:USERPROFILE\playit.exe" *> $null
-
-    - name: Continue
-      run: |
-          Start-Sleep -Seconds 11800
+      - name: Keep Alive
+        run: |
+          while ($true) {
+            Start-Sleep -Seconds 60
+          }
